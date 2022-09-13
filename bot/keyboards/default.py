@@ -1,10 +1,9 @@
 import math
+
 from aiogram import types
 from aiogram.types import (InlineKeyboardButton, InlineKeyboardMarkup,
-                            ReplyKeyboardMarkup, KeyboardButton,
-                            InlineKeyboardMarkup, InlineKeyboardButton)
-
-
+                           KeyboardButton, ReplyKeyboardMarkup)
+                           
 from bot.objects import data
 
 
@@ -55,6 +54,34 @@ def add_audio_list(category, audio_dict, page):
         InlineKeyboardButton("<", callback_data=f"audio_back|{page_back}"),
         InlineKeyboardButton(f"{page}/{math.ceil(len(audio_dict)/10)}", callback_data=f"ignore"),
         InlineKeyboardButton(">", callback_data=f"audio_next|{page_next}")
+    )
+    return kb
+
+
+def add_favourites_audio_list(user, page):
+    kb = InlineKeyboardMarkup()
+
+    min = 0 + ((page-1)*10)
+    max = page*10
+
+    if page != 1:
+        page_back = page-1
+    else:
+        page_back = 0
+    if page != math.ceil(len(user['favourites'])/10):
+        page_next = page+1
+    else:
+        page_next = 0
+
+    for index in range(min, max):
+        if index>=len(user['favourites']):
+            break
+        kb.add(InlineKeyboardButton(user['favourites'][index].split("|")[1], callback_data=f"audio|{user['favourites'][index]}"))
+
+    kb.row(
+        InlineKeyboardButton("<", callback_data=f"audio_favourites_back|{page_back}"),
+        InlineKeyboardButton(f"{page}/{math.ceil(len(user['favourites'])/10)}", callback_data=f"ignore"),
+        InlineKeyboardButton(">", callback_data=f"audio_favourites_next|{page_next}")
     )
     return kb
 

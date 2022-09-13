@@ -1,4 +1,3 @@
-from abc import update_abstractmethods
 import os
 
 import dotenv
@@ -6,11 +5,12 @@ import requests
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from bot.functions.rights import is_Admin
 
+from bot.functions.rights import is_Admin
 from bot.handlers.logger import logger, print_msg
 from bot.keyboards.default import (add_audio_list, add_favourite_audio_btn,
-                                   add_menu, categories)
+                                   add_favourites_audio_list, add_menu,
+                                   categories)
 from bot.objects import data
 
 dotenv.load_dotenv()
@@ -36,6 +36,12 @@ async def show_list(message: types.Message, state: FSMContext):
     user = data.get_user(message.from_user.id)
     audio_dict = data.data['audio'][user['category']]
     await message.reply(f"Категория: {user['category']}", reply_markup=add_audio_list(user['category'], audio_dict, 1))
+
+
+@print_msg
+async def show_list_favourites(message: types.Message, state: FSMContext):
+    user = data.get_user(message.from_user.id)
+    await message.reply(f"Категория: Избранные", reply_markup=add_favourites_audio_list(user, 1))
 
 
 async def send_audio(query: types.CallbackQuery):
@@ -89,6 +95,26 @@ async def audio_next(query: types.CallbackQuery):
     await query.message.edit_reply_markup(add_audio_list(user['category'], audio_dict, page))
 
 
+async def audio_favourites_back(query: types.CallbackQuery):
+    await query.answer()
+    page = int(query.data.split("|")[1])
+    if page == 0:
+        return
+    user_id = query.from_user.id
+    user = data.get_user(user_id)
+    await query.message.edit_reply_markup(add_favourites_audio_list(user, page))
+
+
+async def audio_favourites_next(query: types.CallbackQuery):
+    await query.answer()
+    page = int(query.data.split("|")[1])
+    if page == 0:
+        return
+    user_id = query.from_user.id
+    user = data.get_user(user_id)
+    await query.message.edit_reply_markup(add_favourites_audio_list(user, page))
+
+
 async def ignore(query: types.CallbackQuery):
     await query.answer()
 
@@ -123,7 +149,6 @@ async def audio_name(message: types.Message, state: FSMContext):
     await state.finish()
 
 
-
 async def delete_msg(query: types.CallbackQuery):
     try:
         await query.bot.delete_message(query.message.chat.id, query.message.message_id)
@@ -133,12 +158,13 @@ async def delete_msg(query: types.CallbackQuery):
     except Exception as exc:
         logger.error(exc)
         await query.answer("Error")
-
+  
 
 def register_handlers_default(dp: Dispatcher):
     dp.register_message_handler(start, commands="start", state="*")
     dp.register_message_handler(help, commands="help", state="*")
     dp.register_message_handler(show_list, lambda msg: msg.text == "Посмотреть список🔍", content_types=['text'])
+    dp.register_message_handler(show_list_favourites, lambda msg: msg.text == "🔔Избранное", content_types=['text'])
 
     dp.register_message_handler(new_audio, content_types=['voice'])
     dp.register_message_handler(audio_name, content_types=['text'], state=Upload.wait_name)
@@ -173,6 +199,16 @@ def register_handlers_default(dp: Dispatcher):
     dp.register_callback_query_handler(
         audio_next,
         lambda c: c.data.split("|")[0] == "audio_next",
+        state="*"
+    )
+    dp.register_callback_query_handler(
+        audio_favourites_back,
+        lambda c: c.data.split("|")[0] == "audio_favourites_back",
+        state="*"
+    )
+    dp.register_callback_query_handler(
+        audio_favourites_next,
+        lambda c: c.data.split("|")[0] == "audio_favourites_next",
         state="*"
     )
     dp.register_callback_query_handler(

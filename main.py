@@ -1,15 +1,15 @@
 import asyncio
 import os
 
-from aiogram import Bot
-from aiogram.types import BotCommand
-from aiogram.dispatcher import Dispatcher
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import dotenv
+from aiogram import Bot
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import Dispatcher
+from aiogram.types import BotCommand
 
 from bot.handlers.default import register_handlers_default
-from bot.handlers.secondary import register_handlers_secondary
 from bot.handlers.logger import logger
+from bot.handlers.secondary import register_handlers_secondary
 from bot.objects import data
 
 dotenv.load_dotenv()
@@ -18,7 +18,6 @@ dotenv.load_dotenv()
 async def set_commands(bot):
     commands = [
         BotCommand(command="/start", description="Начать"),
-        BotCommand(command="/help", description="Помощь"),
         BotCommand(command="/get_logfile", description="Получить Logs (admin)"),
     ]
     await bot.set_my_commands(commands)

@@ -1,7 +1,7 @@
 import json
 import os
-from aiogram import types
 
+from aiogram import types
 
 data = {}
 
