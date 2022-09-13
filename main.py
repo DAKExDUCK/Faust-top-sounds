@@ -10,6 +10,7 @@ import dotenv
 from bot.handlers.default import register_handlers_default
 from bot.handlers.secondary import register_handlers_secondary
 from bot.handlers.logger import logger
+from bot.objects import data
 
 dotenv.load_dotenv()
 
@@ -18,14 +19,13 @@ async def set_commands(bot):
     commands = [
         BotCommand(command="/start", description="Начать"),
         BotCommand(command="/help", description="Помощь"),
-        BotCommand(command="/stop", description="Остановить"),
-        BotCommand(command="/msg_to_admin", description="Написать сообщение админу"),
         BotCommand(command="/get_logfile", description="Получить Logs (admin)"),
     ]
     await bot.set_my_commands(commands)
 
 
 async def main():
+    data.start()
     logger.info("Configuring...")
     
     bot = Bot(token=os.getenv('TOKEN'))
@@ -37,6 +37,7 @@ async def main():
     await set_commands(bot)
 
     await dp.start_polling()
+    data.close()
 
 
 if __name__ == '__main__':
