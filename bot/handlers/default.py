@@ -3,11 +3,11 @@ from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from bot.functions.rights import is_Admin, is_sub
+from bot.functions.rights import is_Admin, is_Sub, is_sub
 from bot.handlers.logger import logger, print_msg
 from bot.keyboards.default import (add_audio_list, add_favourite_audio_btn,
                                    add_favourites_audio_list, add_menu,
-                                   categories)
+                                   categories, profile_menu)
 from bot.objects import data
 
 dotenv.load_dotenv()
@@ -20,6 +20,30 @@ class Upload(StatesGroup):
 
 @print_msg
 async def start(message: types.Message, state: FSMContext):
+    if len(message.get_args()):
+        args = message.get_args()
+        action = args.split("-")[0]
+        if action == "bonus":
+            id = args.split("-")[1]
+            if not data.check_user(message.from_user.id):
+                data.new_user(message.from_user.id)
+                user = data.get_user(id)
+                user['friends'] += 1
+                if user['friends'] % 3 == 0:
+                    data.set_vip(user['id'])
+                    try:
+                        await message.bot.send_message("Вам был выдан VIP статус на неделю")
+                    except:
+                        ...
+        elif action == "unlock":
+            text = "💬 Для доступа к данной функции бота необходимо подписаться на каналы:\n\n"
+            for channel in data.data['channels']:
+                text += f"    [{channel['name']}]({channel['link']})\n"
+            text += "\nКак только подписался, продолжи дальше пользоваться ботом"
+            await message.answer(text, parse_mode='MarkdownV2')
+            return
+
+
     text = "Привет ✌️!\n" \
         "Я-бот который поможет тебе  оригинально ответить на сообщение друга!\n\n" \
         "Также я работаю в inline-режиме\n\n" \
@@ -35,42 +59,72 @@ async def show_list(message: types.Message, state: FSMContext):
     await message.reply(f"Категория: {user['category']}", reply_markup=add_audio_list(user['category'], audio_dict, 1))
 
 
-@is_sub
+@is_Sub
 @print_msg
 async def show_list_favourites(message: types.Message, state: FSMContext):
     user = data.get_user(message.from_user.id)
     await message.reply(f"Категория: Избранные", reply_markup=add_favourites_audio_list(user, 1))
 
 
-@is_sub
+@print_msg
+async def profile(message: types.Message, state: FSMContext):
+    user = data.get_user(message.from_user.id)
+    text = "👤 Ваш профиль\n" \
+            "➖➖➖➖➖➖➖\n" \
+            f"👥Друзей: {user['friends']}\n" \
+            f"😎VIP Статус: {'да' if data.is_vip(user['id']) else 'нет'}\n" \
+            "➖➖➖➖➖➖➖\n" \
+            f"🗯Добавил в избранное: {len(user['favourites'])}\n" \
+            "➖➖➖➖➖➖➖\n" \
+            f"♻️Режим: {user['category']}"
+    await message.reply(text, reply_markup=profile_menu())
+
+
+@is_Sub
 async def send_audio(query: types.CallbackQuery):
     user_id = query.from_user.id
-    action, category, name = query.data.split("|")
-    voice_id, audio_used = data.get_audio(category, name)
+    action, category, index = query.data.split("|")
+    name, voice_id, audio_used = data.get_audio(category, index)
     await query.answer()
     await query.message.answer_chat_action('record_voice')
     await query.message.answer_audio(voice_id, 
                                     caption=f"Название: {name}\nИспользовано: {audio_used}",
-                                    reply_markup=add_favourite_audio_btn(category, name, user_id))
+                                    reply_markup=add_favourite_audio_btn(category, index, user_id, name))
 
 
-@is_sub
+@is_Sub
 async def add_favourites(query: types.CallbackQuery):
     user_id = query.from_user.id
-    action, category, name = query.data.split("|")
+    action, category, index = query.data.split("|")
+    name, voice_id, audio_used = data.get_audio(category, index)
     user = data.get_user(user_id)
-    if f"{category}|{name}" not in user['favourites']:
-        user['favourites'].append(f"{category}|{name}")
-    await query.message.edit_reply_markup(add_favourite_audio_btn(category, name, user_id))
+    if f"{category}|{index}" not in user['favourites']:
+        user['favourites'].append(f"{category}|{index}")
+    await query.message.edit_reply_markup(add_favourite_audio_btn(category, index, user_id, name))
 
 
 async def remove_favourites(query: types.CallbackQuery):
     user_id = query.from_user.id
-    action, category, name = query.data.split("|")
+    action, category, index = query.data.split("|")
+    name, voice_id, audio_used = data.get_audio(category, index)
     user = data.get_user(user_id)
-    if f"{category}|{name}" in user['favourites']:
-        user['favourites'].remove(f"{category}|{name}")
-    await query.message.edit_reply_markup(add_favourite_audio_btn(category, name, user_id))
+    if f"{category}|{index}" in user['favourites']:
+        user['favourites'].remove(f"{category}|{index}")
+    await query.message.edit_reply_markup(add_favourite_audio_btn(category, index, user_id, name))
+
+
+@is_Admin
+async def new_category(message: types.Message):
+    arg = message.get_args()
+    if len(arg) == 0:
+        await message.reply("Usage: /new_cat Юмор")
+    else:
+        list = [a.lower() for a in data.data['audio']]
+        if arg.lower() not in list:
+            data.data['audio'][arg] = {}
+            await message.answer(f"{arg} category created!")
+        else:
+            await message.answer(f"This category is already in data")
 
 
 @is_Admin
@@ -101,6 +155,19 @@ async def audio_name(message: types.Message, state: FSMContext):
 
 
 async def show_audio_list(inline_query: types.InlineQuery):
+    if not await is_sub(inline_query.from_user.id, inline_query.bot):
+        results = [
+            types.InlineQueryResultArticle(
+                        id=0,
+                        title="Заблокировано",
+                        description="Чтобы разблокировать, перейдите к боту",
+                        input_message_content=types.InputTextMessageContent(
+                            message_text="t.me/" + (await inline_query.bot.get_me())['username'] + "?start=unlock"
+                        )
+            )
+        ]
+        await inline_query.answer(results, is_personal=True, cache_time=None)
+        return
     results = []
     index = 0
     if len(inline_query.query) == 0:
@@ -149,6 +216,9 @@ def register_handlers_default(dp: Dispatcher):
     dp.register_message_handler(help, commands="help", state="*")
     dp.register_message_handler(show_list, lambda msg: msg.text == "Посмотреть список🔍", content_types=['text'])
     dp.register_message_handler(show_list_favourites, lambda msg: msg.text == "🔔Избранное", content_types=['text'])
+    dp.register_message_handler(profile, lambda msg: msg.text == "👮‍♀Профиль", content_types=['text'])
+
+    dp.register_message_handler(new_category, commands="new_cat", state="*")
 
     dp.register_message_handler(new_audio, content_types=['voice'])
     dp.register_message_handler(audio_name, content_types=['text'], state=Upload.wait_name)
