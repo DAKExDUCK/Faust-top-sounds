@@ -47,18 +47,17 @@ def get_user(user_id):
 
 def get_audio(category, name):
     global data
-    file_name = data['audio'][category][name]['name']
-    audio_file = types.InputFile(f"src/{file_name}")
+    voice_id = data['audio'][category][name]['voice_id']
     user = data['audio'][category][name]['used']
     data['audio'][category][name]['used'] += 1
-    return audio_file, user
+    return voice_id, user
         
 
-def set_new_audio(category, name):
+def set_new_audio(category, name, voice_id):
     global data
-    os.rename("src/temp.ogg", f"src/{name}.ogg")
     data['audio'][category][name] = {
-        "name": f"{name}.ogg",
+        "name": f"{name}",
+        "voice_id": voice_id,
         "used": 0
     }
 

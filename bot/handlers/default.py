@@ -1,12 +1,9 @@
-import os
-
 import dotenv
-import requests
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from bot.functions.rights import is_Admin
+from bot.functions.rights import is_Admin, is_sub
 from bot.handlers.logger import logger, print_msg
 from bot.keyboards.default import (add_audio_list, add_favourite_audio_btn,
                                    add_favourites_audio_list, add_menu,
@@ -38,23 +35,26 @@ async def show_list(message: types.Message, state: FSMContext):
     await message.reply(f"Категория: {user['category']}", reply_markup=add_audio_list(user['category'], audio_dict, 1))
 
 
+@is_sub
 @print_msg
 async def show_list_favourites(message: types.Message, state: FSMContext):
     user = data.get_user(message.from_user.id)
     await message.reply(f"Категория: Избранные", reply_markup=add_favourites_audio_list(user, 1))
 
 
+@is_sub
 async def send_audio(query: types.CallbackQuery):
     user_id = query.from_user.id
     action, category, name = query.data.split("|")
-    audio_file, audio_used = data.get_audio(category, name)
+    voice_id, audio_used = data.get_audio(category, name)
     await query.answer()
     await query.message.answer_chat_action('record_voice')
-    await query.message.answer_audio(audio_file, 
+    await query.message.answer_audio(voice_id, 
                                     caption=f"Название: {name}\nИспользовано: {audio_used}",
                                     reply_markup=add_favourite_audio_btn(category, name, user_id))
 
 
+@is_sub
 async def add_favourites(query: types.CallbackQuery):
     user_id = query.from_user.id
     action, category, name = query.data.split("|")
@@ -73,61 +73,11 @@ async def remove_favourites(query: types.CallbackQuery):
     await query.message.edit_reply_markup(add_favourite_audio_btn(category, name, user_id))
 
 
-async def audio_back(query: types.CallbackQuery):
-    await query.answer()
-    page = int(query.data.split("|")[1])
-    if page == 0:
-        return
-    user_id = query.from_user.id
-    user = data.get_user(user_id)
-    audio_dict = data.data['audio'][user['category']]
-    await query.message.edit_reply_markup(add_audio_list(user['category'], audio_dict, page))
-
-
-async def audio_next(query: types.CallbackQuery):
-    await query.answer()
-    page = int(query.data.split("|")[1])
-    if page == 0:
-        return
-    user_id = query.from_user.id
-    user = data.get_user(user_id)
-    audio_dict = data.data['audio'][user['category']]
-    await query.message.edit_reply_markup(add_audio_list(user['category'], audio_dict, page))
-
-
-async def audio_favourites_back(query: types.CallbackQuery):
-    await query.answer()
-    page = int(query.data.split("|")[1])
-    if page == 0:
-        return
-    user_id = query.from_user.id
-    user = data.get_user(user_id)
-    await query.message.edit_reply_markup(add_favourites_audio_list(user, page))
-
-
-async def audio_favourites_next(query: types.CallbackQuery):
-    await query.answer()
-    page = int(query.data.split("|")[1])
-    if page == 0:
-        return
-    user_id = query.from_user.id
-    user = data.get_user(user_id)
-    await query.message.edit_reply_markup(add_favourites_audio_list(user, page))
-
-
-async def ignore(query: types.CallbackQuery):
-    await query.answer()
-
-
 @is_Admin
 async def new_audio(message: types.Message, state: FSMContext):
-    file_info = await message.bot.get_file(message.voice.file_id)
-    file = requests.get('https://api.telegram.org/file/bot{0}/{1}'.format(os.getenv('TOKEN'), file_info.file_path))
-
-    with open('src/temp.ogg','wb') as f:
-        f.write(file.content)
+    async with state.proxy() as d:
+        d['voice_id'] = message.voice.file_id
     await Upload.wait_category.set()
-
 
     await message.reply("Audio uploaded, choose category", reply_markup=categories())
 
@@ -143,10 +93,44 @@ async def audio_name(message: types.Message, state: FSMContext):
     name = message.text
     async with state.proxy() as d:
         category = d['category']
+        voice_id = d['voice_id']
     
-    data.set_new_audio(category, name)
+    data.set_new_audio(category, name, voice_id)
     await message.reply("Success!!!")
     await state.finish()
+
+
+async def show_audio_list(inline_query: types.InlineQuery):
+    results = []
+    index = 0
+    if len(inline_query.query) == 0:
+        for category in data.data['audio']:
+            category = data.data['audio'][category]
+            for audio in category:
+                audio = category[audio]
+                results.append(
+                    types.InlineQueryResultVoice(
+                        id=index,
+                        voice_url=audio['voice_id'],
+                        title=audio['name']
+                        )
+                )
+                index += 1
+    else:
+        for category in data.data['audio']:
+            category = data.data['audio'][category]
+            for audio in category:
+                audio = category[audio]
+                if inline_query.query.lower() in audio['name'].lower():
+                    results.append(
+                        types.InlineQueryResultVoice(
+                            id=index,
+                            voice_url=audio['voice_id'],
+                            title=audio['name']
+                            )
+                    )
+                    index += 1
+    await inline_query.answer(results, is_personal=True, cache_time=None)
 
 
 async def delete_msg(query: types.CallbackQuery):
@@ -169,6 +153,8 @@ def register_handlers_default(dp: Dispatcher):
     dp.register_message_handler(new_audio, content_types=['voice'])
     dp.register_message_handler(audio_name, content_types=['text'], state=Upload.wait_name)
 
+    dp.register_inline_handler(show_audio_list)
+
     dp.register_callback_query_handler(
         set_audio_category,
         lambda c: c.data.split("|")[0] == "set_audio_category",
@@ -188,32 +174,6 @@ def register_handlers_default(dp: Dispatcher):
     dp.register_callback_query_handler(
         remove_favourites,
         lambda c: c.data.split("|")[0] == "remove_favourites",
-        state="*"
-    )
-
-    dp.register_callback_query_handler(
-        audio_back,
-        lambda c: c.data.split("|")[0] == "audio_back",
-        state="*"
-    )
-    dp.register_callback_query_handler(
-        audio_next,
-        lambda c: c.data.split("|")[0] == "audio_next",
-        state="*"
-    )
-    dp.register_callback_query_handler(
-        audio_favourites_back,
-        lambda c: c.data.split("|")[0] == "audio_favourites_back",
-        state="*"
-    )
-    dp.register_callback_query_handler(
-        audio_favourites_next,
-        lambda c: c.data.split("|")[0] == "audio_favourites_next",
-        state="*"
-    )
-    dp.register_callback_query_handler(
-        ignore,
-        lambda c: c.data == "ignore",
         state="*"
     )
 
