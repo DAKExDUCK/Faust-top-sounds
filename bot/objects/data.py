@@ -10,6 +10,29 @@ def start():
     global data
     with open("bot/objects/data.json", 'r') as file:
         data = json.loads(file.read())
+    load_new_audio()
+
+
+def load_new_audio():
+    global data
+    from os import listdir
+    from os.path import isfile, join, isdir
+    src = "bot/objects/src/"
+    dirs = [f for f in listdir(src) if isdir(join(src, f))]
+    
+    for dir_name in dirs:
+        dir_path = src + dir_name
+        files = [f for f in listdir(dir_path) if isfile(join(dir_path, f))]
+        if dir_name not in data['audio']:
+            data['audio'][dir_name] = {}
+        for file_name in files:
+            file_name = file_name.replace('.mp3', '')
+            if file_name not in data['audio'][dir_name]:
+                data['audio'][dir_name][file_name] = {
+                    'name': file_name,
+                    'voice_id': None,
+                    'used': 0
+                }
 
 
 def close():
@@ -79,15 +102,13 @@ def get_audio(category, index):
     voice_id = data['audio'][category][index]['voice_id']
     name = data['audio'][category][index]['name']
     user = data['audio'][category][index]['used']
-    data['audio'][category][index]['used'] += 1
     return name, voice_id, user
         
 
 def set_new_audio(category, name, voice_id):
     global data
-    index = int(sorted(data['audio'][category].keys())[-1]) + 1
-    data['audio'][category][index] = {
-        "name": f"{name}",
+    data['audio'][category][name] = {
+        "name": name,
         "voice_id": voice_id,
         "used": 0
     }

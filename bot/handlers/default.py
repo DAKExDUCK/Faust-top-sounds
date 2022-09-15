@@ -85,11 +85,18 @@ async def send_audio(query: types.CallbackQuery):
     user_id = query.from_user.id
     action, category, index = query.data.split("|")
     name, voice_id, audio_used = data.get_audio(category, index)
+    data.data['audio'][category][index]['used'] += 1
     await query.answer()
     await query.message.answer_chat_action('record_voice')
-    await query.message.answer_voice(voice_id, 
-                                    caption=f"Название: {name}\nИспользовано: {audio_used}",
-                                    reply_markup=add_favourite_audio_btn(category, index, user_id, name))
+    if voice_id is not None:
+        await query.message.answer_voice(voice_id, 
+                                        caption=f"Название: {name}\nИспользовано: {audio_used}",
+                                        reply_markup=add_favourite_audio_btn(category, index, user_id, name))
+    else:
+        msg = await query.message.answer_voice(open(f"bot/objects/src/{category}/{index}.mp3", "rb"), 
+                                        caption=f"Название: {name}\nИспользовано: {audio_used}",
+                                       reply_markup=add_favourite_audio_btn(category, index, user_id, name))
+        data.data['audio'][category][index]['voice_id'] = msg.voice.file_id
 
 
 @is_Sub

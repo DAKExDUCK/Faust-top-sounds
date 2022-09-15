@@ -107,7 +107,7 @@ async def all_errors(update: types.Update, error):
         await update.message.answer('Error')
         chat_id = update.message.from_user.id
         text = update.message.text
-    logger.error(str(chat_id) + str(text) + str(error), exc_info=True)
+    logger.error(str(chat_id) + ' ' + str(text) + ' ' + str(error), exc_info=True)
 
 
 async def accept_join(request: types.ChatJoinRequest):
