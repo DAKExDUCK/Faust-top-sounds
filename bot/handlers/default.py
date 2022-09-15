@@ -87,7 +87,7 @@ async def send_audio(query: types.CallbackQuery):
     name, voice_id, audio_used = data.get_audio(category, index)
     await query.answer()
     await query.message.answer_chat_action('record_voice')
-    await query.message.answer_audio(voice_id, 
+    await query.message.answer_voice(voice_id, 
                                     caption=f"Название: {name}\nИспользовано: {audio_used}",
                                     reply_markup=add_favourite_audio_btn(category, index, user_id, name))
 
